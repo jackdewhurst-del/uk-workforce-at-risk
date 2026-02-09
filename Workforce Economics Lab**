@@ -1,0 +1,645 @@
+// app.js
+// Workforce Economics Lab v2 (static, GitHub Pages-friendly)
+// No product mentions. Scenario sliders represent generic improvements.
+// This is a benchmarking model for discussion, not a prediction.
+
+// --------- Industry presets (broad UK-style defaults) ----------
+const INDUSTRIES = [
+  { key:"Healthcare & Social Care", attr:26, attrRange:[22,30], tenure:"~3 yrs", stress:42, acceptance:70, tth:45, sacrifice:45, eligible:75, pensionE:5, pensionER:3, usage:18, renewal:8, mix:[70,10,20] },
+  { key:"Retail", attr:35, attrRange:[30,40], tenure:"~1.5 yrs", stress:45, acceptance:68, tth:35, sacrifice:35, eligible:80, pensionE:4, pensionER:3, usage:14, renewal:10, mix:[75,8,17] },
+  { key:"Hospitality", attr:40, attrRange:[35,45], tenure:"~1.3 yrs", stress:48, acceptance:65, tth:28, sacrifice:30, eligible:80, pensionE:4, pensionER:3, usage:12, renewal:10, mix:[78,7,15] },
+  { key:"Professional Services", attr:18, attrRange:[15,22], tenure:"~4 yrs", stress:28, acceptance:78, tth:55, sacrifice:55, eligible:70, pensionE:6, pensionER:4, usage:26, renewal:7, mix:[35,20,45] },
+  { key:"Manufacturing", attr:12, attrRange:[10,15], tenure:"~5 yrs", stress:30, acceptance:75, tth:50, sacrifice:45, eligible:75, pensionE:5, pensionER:3, usage:18, renewal:8, mix:[65,12,23] },
+  { key:"Tech / SaaS", attr:20, attrRange:[15,25], tenure:"~2.5 yrs", stress:26, acceptance:82, tth:60, sacrifice:60, eligible:70, pensionE:6, pensionER:4, usage:28, renewal:6, mix:[25,20,55] },
+  { key:"Education", attr:15, attrRange:[12,18], tenure:"~6 yrs", stress:25, acceptance:78, tth:65, sacrifice:50, eligible:75, pensionE:6, pensionER:6, usage:22, renewal:7, mix:[55,15,30] },
+  { key:"Logistics", attr:22, attrRange:[18,28], tenure:"~3 yrs", stress:38, acceptance:70, tth:40, sacrifice:40, eligible:80, pensionE:4, pensionER:3, usage:16, renewal:9, mix:[70,10,20] },
+  { key:"Construction", attr:22, attrRange:[18,28], tenure:"~3 yrs", stress:36, acceptance:72, tth:45, sacrifice:40, eligible:75, pensionE:4, pensionER:3, usage:16, renewal:9, mix:[72,10,18] },
+  { key:"Financial Services", attr:14, attrRange:[10,18], tenure:"~5 yrs", stress:22, acceptance:80, tth:65, sacrifice:65, eligible:70, pensionE:7, pensionER:5, usage:30, renewal:6, mix:[30,25,45] },
+  { key:"Public Sector (General)", attr:10, attrRange:[8,14], tenure:"~7 yrs", stress:24, acceptance:75, tth:75, sacrifice:55, eligible:80, pensionE:6, pensionER:6, usage:20, renewal:7, mix:[55,18,27] },
+  { key:"Energy & Utilities", attr:14, attrRange:[10,18], tenure:"~5 yrs", stress:24, acceptance:78, tth:60, sacrifice:55, eligible:70, pensionE:6, pensionER:4, usage:24, renewal:7, mix:[45,18,37] },
+  { key:"Charity / Non-profit", attr:18, attrRange:[14,24], tenure:"~4 yrs", stress:34, acceptance:74, tth:55, sacrifice:45, eligible:80, pensionE:5, pensionER:3, usage:18, renewal:8, mix:[60,15,25] },
+  { key:"Media & Creative", attr:22, attrRange:[16,28], tenure:"~3 yrs", stress:32, acceptance:76, tth:50, sacrifice:50, eligible:75, pensionE:5, pensionER:3, usage:22, renewal:8, mix:[45,18,37] },
+  { key:"Real Estate", attr:18, attrRange:[14,24], tenure:"~4 yrs", stress:28, acceptance:76, tth:55, sacrifice:50, eligible:70, pensionE:5, pensionER:3, usage:22, renewal:8, mix:[50,20,30] },
+  { key:"Automotive", attr:18, attrRange:[14,24], tenure:"~4 yrs", stress:34, acceptance:74, tth:45, sacrifice:45, eligible:75, pensionE:5, pensionER:3, usage:18, renewal:9, mix:[65,12,23] },
+  { key:"Telecoms", attr:16, attrRange:[12,22], tenure:"~4 yrs", stress:26, acceptance:78, tth:60, sacrifice:55, eligible:70, pensionE:6, pensionER:4, usage:24, renewal:7, mix:[45,18,37] },
+  { key:"Pharma / Life Sciences", attr:14, attrRange:[10,18], tenure:"~5 yrs", stress:22, acceptance:82, tth:65, sacrifice:60, eligible:70, pensionE:7, pensionER:5, usage:28, renewal:6, mix:[35,20,45] },
+  { key:"Agriculture", attr:20, attrRange:[14,28], tenure:"~3 yrs", stress:40, acceptance:70, tth:45, sacrifice:35, eligible:80, pensionE:4, pensionER:3, usage:14, renewal:9, mix:[75,8,17] },
+];
+
+const REGIONS = {
+  uk:      { attrMul: 1.00, tthMul: 1.00, acceptMul: 1.00 },
+  london:  { attrMul: 1.08, tthMul: 1.10, acceptMul: 0.96 },
+  se:      { attrMul: 1.05, tthMul: 1.05, acceptMul: 0.98 },
+  midlands:{ attrMul: 0.98, tthMul: 0.98, acceptMul: 1.01 },
+  north:   { attrMul: 0.97, tthMul: 0.98, acceptMul: 1.02 },
+  scotland:{ attrMul: 0.97, tthMul: 1.00, acceptMul: 1.01 },
+  wales:   { attrMul: 0.96, tthMul: 0.98, acceptMul: 1.02 },
+  ni:      { attrMul: 0.95, tthMul: 0.98, acceptMul: 1.02 },
+};
+
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const pct = (x) => clamp(Number(x || 0), 0, 100) / 100;
+
+function fmtGBP(n){
+  const v = Math.round(n);
+  return "£" + v.toLocaleString("en-GB");
+}
+function fmtInt(n){
+  return Math.round(n).toLocaleString("en-GB");
+}
+
+// --------- Elements ----------
+const els = {
+  industry: $("industry"),
+  region: $("region"),
+  headcount: $("headcount"),
+  salary: $("salary"),
+
+  // mix
+  mixFrontline: $("mixFrontline"),
+  mixManagers: $("mixManagers"),
+  mixSpecialists: $("mixSpecialists"),
+  mixHint: $("mixHint"),
+
+  // retention
+  attritionRate: $("attritionRate"),
+  replFrontline: $("replFrontline"),
+  replManagers: $("replManagers"),
+  replSpecialists: $("replSpecialists"),
+  retentionHint: $("retentionHint"),
+
+  // scaling
+  targetGrowth: $("targetGrowth"),
+  acceptanceRate: $("acceptanceRate"),
+  timeToHire: $("timeToHire"),
+  growthHint: $("growthHint"),
+
+  // NI
+  sacrificeUptake: $("sacrificeUptake"),
+  eligiblePct: $("eligiblePct"),
+  niRate: $("niRate"),
+  avgSacrificePct: $("avgSacrificePct"),
+  niHint: $("niHint"),
+
+  // pension
+  pensionEmployee: $("pensionEmployee"),
+  pensionEmployer: $("pensionEmployer"),
+  pensionTarget: $("pensionTarget"),
+  retireYears: $("retireYears"),
+  pensionHint: $("pensionHint"),
+
+  // engagement
+  benefitUsage: $("benefitUsage"),
+  renewalIncrease: $("renewalIncrease"),
+  benefitHint: $("benefitHint"),
+
+  // scenario sliders
+  assumpRetention: $("assumpRetention"),
+  assumpProductivity: $("assumpProductivity"),
+  assumpSacrifice: $("assumpSacrifice"),
+  assumpEngagement: $("assumpEngagement"),
+  assumpRetentionVal: $("assumpRetentionVal"),
+  assumpProductivityVal: $("assumpProductivityVal"),
+  assumpSacrificeVal: $("assumpSacrificeVal"),
+  assumpEngagementVal: $("assumpEngagementVal"),
+
+  // KPIs
+  engagementScore: $("engagementScore"),
+  kpiAttrCost: $("kpiAttrCost"),
+  kpiAttrNote: $("kpiAttrNote"),
+  kpiGrowthDrag: $("kpiGrowthDrag"),
+  kpiGrowthNote: $("kpiGrowthNote"),
+  kpiNiGap: $("kpiNiGap"),
+  kpiNiNote: $("kpiNiNote"),
+  kpiPensionGap: $("kpiPensionGap"),
+  kpiPensionNote: $("kpiPensionNote"),
+  totalImpact: $("totalImpact"),
+  totalImpactNote: $("totalImpactNote"),
+
+  // export
+  copySummary: $("copySummary"),
+  printView: $("printView"),
+  summaryStatus: $("summaryStatus"),
+
+  // news
+  refreshNews: $("refreshNews"),
+  newsStatus: $("newsStatus"),
+  newsList: $("newsList"),
+};
+
+function selectedIndustry(){
+  return INDUSTRIES.find(x => x.key === els.industry.value) || INDUSTRIES[0];
+}
+function selectedRegion(){
+  return REGIONS[els.region.value] || REGIONS.uk;
+}
+
+// --------- Populate industry dropdown ----------
+(function initIndustry(){
+  for (const ind of INDUSTRIES){
+    const opt = document.createElement("option");
+    opt.value = ind.key;
+    opt.textContent = ind.key;
+    els.industry.appendChild(opt);
+  }
+  els.industry.value = "Healthcare & Social Care";
+})();
+
+// --------- Chart ----------
+const chart = new Chart(document.getElementById("projectionChart"), {
+  type: "line",
+  data: {
+    labels: ["Year 1","Year 2","Year 3"],
+    datasets: [
+      { label: "Baseline leakage (attrition)", data: [0,0,0], tension: 0.25 },
+      { label: "Scenario impact (savings)", data: [0,0,0], tension: 0.25 }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: "#e5e7eb" } },
+      tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtGBP(ctx.parsed.y)}` } }
+    },
+    scales: { y: { ticks: { callback: (v)=>"£"+Number(v).toLocaleString("en-GB") } } }
+  }
+});
+
+// --------- Defaults ----------
+function loadDefaultsFromIndustry(){
+  const ind = selectedIndustry();
+  const headcount = Math.max(1, Number(els.headcount.value || 250));
+
+  // mix
+  els.mixFrontline.value = ind.mix[0];
+  els.mixManagers.value = ind.mix[1];
+  els.mixSpecialists.value = ind.mix[2];
+
+  // retention
+  els.attritionRate.value = ind.attr;
+  // role replacement defaults (as % salary) - tuneable
+  els.replFrontline.value = 30;
+  els.replManagers.value = 60;
+  els.replSpecialists.value = 90;
+
+  // scaling
+  els.targetGrowth.value = Math.round(headcount * 0.10);
+  els.acceptanceRate.value = ind.acceptance;
+  els.timeToHire.value = ind.tth;
+
+  // NI
+  els.sacrificeUptake.value = ind.sacrifice;
+  els.eligiblePct.value = ind.eligible;
+  els.avgSacrificePct.value = 6.0; // conservative default proxy
+
+  // pension
+  els.pensionEmployee.value = ind.pensionE;
+  els.pensionEmployer.value = ind.pensionER;
+  els.pensionTarget.value = 12.0;
+  els.retireYears.value = 25;
+
+  // benefits engagement
+  els.benefitUsage.value = ind.usage;
+  els.renewalIncrease.value = ind.renewal;
+}
+
+// --------- Scoring helpers ----------
+function scoreFromRisk(risk, low, high){
+  // risk <= low => 100, risk >= high => 0
+  const t = (risk - low) / (high - low);
+  return Math.round(100 * (1 - clamp(t, 0, 1)));
+}
+
+function normalizeMix(){
+  let f = clamp(Number(els.mixFrontline.value || 0), 0, 100);
+  let m = clamp(Number(els.mixManagers.value || 0), 0, 100);
+  let s = clamp(Number(els.mixSpecialists.value || 0), 0, 100);
+  const total = f + m + s;
+
+  // If total is 0, reset to something sane
+  if (total <= 0){
+    f = 60; m = 15; s = 25;
+    els.mixFrontline.value = f; els.mixManagers.value = m; els.mixSpecialists.value = s;
+    return { f:0.60, m:0.15, s:0.25, total:100 };
+  }
+
+  // If total != 100, we normalize (but keep the inputs visible)
+  const nf = f / total, nm = m / total, ns = s / total;
+  const isExact = Math.abs(total - 100) < 0.01;
+  els.mixHint.textContent = isExact
+    ? `Role mix totals 100%.`
+    : `Role mix totals ${total.toFixed(0)}%. Model normalises internally.`;
+
+  return { f:nf, m:nm, s:ns, total };
+}
+
+// --------- Core model ----------
+function recalc(){
+  const ind = selectedIndustry();
+  const reg = selectedRegion();
+
+  const headcount = Math.max(1, Number(els.headcount.value || 1));
+  const salary = Math.max(0, Number(els.salary.value || 0));
+
+  // mix (normalized)
+  const mix = normalizeMix();
+
+  // retention inputs
+  const attrRateRaw = clamp(Number(els.attritionRate.value || 0), 0, 100) / 100;
+  const attrRate = clamp(attrRateRaw * reg.attrMul, 0, 1);
+
+  const replF = clamp(Number(els.replFrontline.value || 0), 0, 300) / 100;
+  const replM = clamp(Number(els.replManagers.value || 0), 0, 300) / 100;
+  const replS = clamp(Number(els.replSpecialists.value || 0), 0, 300) / 100;
+
+  // role multipliers (attrition differs by role type)
+  // (Conservative heuristic: frontline higher churn; specialists slightly lower)
+  const roleAttrF = attrRate * 1.10;
+  const roleAttrM = attrRate * 0.90;
+  const roleAttrS = attrRate * 0.95;
+
+  // role salary multipliers (rough)
+  const salF = salary * 0.85;
+  const salM = salary * 1.30;
+  const salS = salary * 1.60;
+
+  const hcF = headcount * mix.f;
+  const hcM = headcount * mix.m;
+  const hcS = headcount * mix.s;
+
+  const leaversF = hcF * roleAttrF;
+  const leaversM = hcM * roleAttrM;
+  const leaversS = hcS * roleAttrS;
+
+  const costF = leaversF * (salF * replF);
+  const costM = leaversM * (salM * replM);
+  const costS = leaversS * (salS * replS);
+
+  const annualLeavers = leaversF + leaversM + leaversS;
+  const annualAttrCost = costF + costM + costS;
+
+  els.kpiAttrCost.textContent = fmtGBP(annualAttrCost);
+  els.kpiAttrNote.textContent =
+    `~${fmtInt(annualLeavers)} leavers/year (role-adjusted) @ ${Math.round(attrRate*100)}% baseline attrition.`;
+
+  els.retentionHint.textContent =
+    `Benchmark for ${ind.key}: ${ind.attrRange[0]}–${ind.attrRange[1]}% attrition (typical tenure ${ind.tenure}). Region modifier applied: ${els.region.options[els.region.selectedIndex].text}.`;
+
+  // attraction & scaling
+  const targetGrowth = Math.max(0, Number(els.targetGrowth.value || 0));
+  const acceptance = clamp(Number(els.acceptanceRate.value || 0), 1, 100) / 100;
+  const acceptanceAdj = clamp(acceptance * reg.acceptMul, 0.2, 0.98);
+
+  const tth = Math.max(1, Number(els.timeToHire.value || 1));
+  const tthAdj = Math.max(1, tth * reg.tthMul);
+
+  const hiresNeeded = targetGrowth + annualLeavers;
+
+  // throughput proxy: slower hiring -> fewer hires realised
+  const speedFactor = clamp(45 / tthAdj, 0.30, 1.15);
+  const realisedHires = hiresNeeded * acceptanceAdj * speedFactor;
+  const netGrowthRealised = Math.max(0, realisedHires - annualLeavers);
+  const growthShortfall = Math.max(0, targetGrowth - netGrowthRealised);
+
+  // capacity cost proxy (conservative)
+  const capacityCost = growthShortfall * salary * 0.30;
+
+  els.kpiGrowthDrag.textContent = `${fmtInt(growthShortfall)} roles`;
+  els.kpiGrowthNote.textContent =
+    `Shortfall vs target ${fmtInt(targetGrowth)}. Capacity leakage proxy: ${fmtGBP(capacityCost)}.`;
+
+  els.growthHint.textContent =
+    `Hires needed ≈ ${fmtInt(hiresNeeded)} (growth ${fmtInt(targetGrowth)} + backfill ${fmtInt(annualLeavers)}). ` +
+    `With acceptance ${Math.round(acceptanceAdj*100)}% & time-to-hire ${Math.round(tthAdj)}d, realised net growth ≈ ${fmtInt(netGrowthRealised)}.`;
+
+  // NI optimisation gap
+  const sacrificeUptake = pct(els.sacrificeUptake.value);
+  const eligiblePct = pct(els.eligiblePct.value);
+  const niRate = clamp(Number(els.niRate.value || 13.8), 0, 30) / 100;
+  const avgSacPct = clamp(Number(els.avgSacrificePct.value || 6), 0, 25) / 100;
+
+  const eligibleEmployees = headcount * eligiblePct;
+  const notUsing = eligibleEmployees * (1 - sacrificeUptake);
+  const avgSacAmt = salary * avgSacPct;
+
+  const annualNiGap = notUsing * avgSacAmt * niRate;
+
+  els.kpiNiGap.textContent = fmtGBP(annualNiGap);
+  els.kpiNiNote.textContent =
+    `${fmtInt(notUsing)} eligible employees not using salary sacrifice (proxy).`;
+
+  els.niHint.textContent =
+    `NI gap estimates unrealised employer NI savings from under-adoption. Assumes avg sacrifice ${Math.round(avgSacPct*100)}% of salary on eligible staff.`;
+
+  // pension contribution gap (exposure proxy)
+  const pensionE = clamp(Number(els.pensionEmployee.value || 0), 0, 40) / 100;
+  const pensionER = clamp(Number(els.pensionEmployer.value || 0), 0, 40) / 100;
+  const pensionTarget = clamp(Number(els.pensionTarget.value || 12), 0, 40) / 100;
+  const retireYears = clamp(Number(els.retireYears.value || 25), 1, 50);
+
+  const totalPension = pensionE + pensionER;
+  const pensionGapRate = Math.max(0, pensionTarget - totalPension);
+
+  // exposure proxy: gap * payroll * horizon-weight
+  const payroll = headcount * salary;
+  const pensionExposure = payroll * pensionGapRate * (retireYears / 25) * 0.35;
+
+  els.kpiPensionGap.textContent = fmtGBP(pensionExposure);
+  els.kpiPensionNote.textContent =
+    `Gap: ${Math.round(pensionGapRate*1000)/10}pp vs ${Math.round(pensionTarget*1000)/10}%. Horizon ${retireYears} yrs (proxy).`;
+
+  els.pensionHint.textContent =
+    `Pension gap is a planning proxy (not advice). It highlights contribution shortfalls relative to a target total contribution rate.`;
+
+  // benefits engagement & renewal risk
+  const usage = pct(els.benefitUsage.value);
+  const renewal = clamp(Number(els.renewalIncrease.value || 0), 0, 100) / 100;
+
+  const engagementRisk = (1 - usage) * (0.65 + renewal * 0.85); // 0..~1.5
+  els.benefitHint.textContent =
+    `Low usage + renewal uplift increases value scrutiny / drop-off risk (proxy index: ${engagementRisk.toFixed(2)}).`;
+
+  // Engagement Score (0–100) - weighted blend of sub-scores
+  const scoreRetention = scoreFromRisk(attrRate, 0.10, 0.40);
+  const scoreGrowth = scoreFromRisk(growthShortfall / Math.max(1, targetGrowth || 1), 0.05, 0.70);
+  const scoreNI = scoreFromRisk(annualNiGap / Math.max(1, payroll * 0.005), 0.3, 5.0); // normalized
+  const scorePension = scoreFromRisk(pensionGapRate, 0.00, 0.06);
+  const scoreBenefits = scoreFromRisk(engagementRisk, 0.20, 1.20);
+
+  const engagementScore =
+    Math.round(scoreRetention * 0.30 +
+               scoreGrowth   * 0.20 +
+               scoreBenefits * 0.20 +
+               scoreNI       * 0.15 +
+               scorePension  * 0.15);
+
+  els.engagementScore.textContent = String(clamp(engagementScore, 0, 100));
+
+  // Scenario impact (improvements)
+  // Retention improvement: absolute pp reduction in attrition (conservative slider)
+  const improveRetentionPP = clamp(Number(els.assumpRetention.value || 0), 0, 3) / 100; // pp in decimals
+  const newAttrRate = Math.max(0, attrRate - improveRetentionPP);
+
+  // recompute leavers/cost with improved attrition (keep role multipliers)
+  const newRoleAttrF = newAttrRate * 1.10;
+  const newRoleAttrM = newAttrRate * 0.90;
+  const newRoleAttrS = newAttrRate * 0.95;
+
+  const newCost =
+    (hcF * newRoleAttrF) * (salF * replF) +
+    (hcM * newRoleAttrM) * (salM * replM) +
+    (hcS * newRoleAttrS) * (salS * replS);
+
+  const retentionSavings = Math.max(0, annualAttrCost - newCost);
+
+  // Productivity recovery: reduce stress-linked lost time by X%
+  const improveProd = clamp(Number(els.assumpProductivity.value || 0), 0, 15) / 100;
+  const stressPct = (ind.stress || 30) / 100;
+
+  // lost time per week per employee (conservative; scales with stress)
+  const hoursLostPerWeek = 1.0 * stressPct; // 0.2–0.5 typical
+  const hourlyRate = salary / (52 * 37.5);
+  const productivityLeak = headcount * hoursLostPerWeek * 52 * hourlyRate;
+  const productivitySavings = productivityLeak * improveProd;
+
+  // NI optimisation improvement: increase uptake by Xpp
+  const improveSacPP = clamp(Number(els.assumpSacrifice.value || 0), 0, 20) / 100;
+  const newSacUptake = clamp(sacrificeUptake + improveSacPP, 0, 1);
+  const extraUsing = eligibleEmployees * (newSacUptake - sacrificeUptake);
+  const niSavings = Math.max(0, extraUsing * avgSacAmt * niRate);
+
+  // Engagement improvement: increase usage by Xpp -> reduce engagementRisk -> proxy saving
+  // We keep it conservative: tie to a small fraction of attrition cost and hiring drag
+  const improveEngPP = clamp(Number(els.assumpEngagement.value || 0), 0, 25) / 100;
+  const newUsage = clamp(usage + improveEngPP, 0, 1);
+  const lift = Math.max(0, newUsage - usage);
+  const engagementSavings = (annualAttrCost * 0.008 + capacityCost * 0.010) * (lift * 4); // conservative scaling
+
+  const totalImpact = retentionSavings + productivitySavings + niSavings + engagementSavings;
+
+  els.assumpRetentionVal.textContent = `${Number(els.assumpRetention.value).toFixed(1)}pp`;
+  els.assumpProductivityVal.textContent = `${Number(els.assumpProductivity.value)}%`;
+  els.assumpSacrificeVal.textContent = `${Number(els.assumpSacrifice.value)}pp`;
+  els.assumpEngagementVal.textContent = `${Number(els.assumpEngagement.value)}pp`;
+
+  els.totalImpact.textContent = fmtGBP(totalImpact);
+  els.totalImpactNote.textContent =
+    `Retention ${fmtGBP(retentionSavings)} + Productivity ${fmtGBP(productivitySavings)} + NI ${fmtGBP(niSavings)} + Engagement ${fmtGBP(engagementSavings)} (proxy).`;
+
+  // Chart: baseline attr leakage vs scenario impact (repeat over 3y for simple view)
+  chart.data.datasets[0].data = [annualAttrCost, annualAttrCost, annualAttrCost];
+  chart.data.datasets[1].data = [totalImpact, totalImpact, totalImpact];
+  chart.update();
+
+  // Small guidance text
+  els.mixHint.textContent =
+    els.mixHint.textContent.includes("normalises")
+      ? els.mixHint.textContent + ` (Model uses Frontline/Manager/Specialist churn and cost differences.)`
+      : `Role mix totals 100%. Model applies different churn/cost assumptions per role type.`;
+}
+
+// --------- Reactive bindings ----------
+function bindRecalc(){
+  const ids = [
+    "industry","region","headcount","salary",
+    "mixFrontline","mixManagers","mixSpecialists",
+    "attritionRate","replFrontline","replManagers","replSpecialists",
+    "targetGrowth","acceptanceRate","timeToHire",
+    "sacrificeUptake","eligiblePct","niRate","avgSacrificePct",
+    "pensionEmployee","pensionEmployer","pensionTarget","retireYears",
+    "benefitUsage","renewalIncrease",
+    "assumpRetention","assumpProductivity","assumpSacrifice","assumpEngagement"
+  ];
+
+  ids.forEach(id => {
+    $(id).addEventListener("input", () => {
+      // if headcount changes and targetGrowth roughly follows default, keep it near 10%
+      if (id === "headcount"){
+        const suggested = Math.round(Math.max(1, Number(els.headcount.value || 250)) * 0.10);
+        const current = Number(els.targetGrowth.value || suggested);
+        if (Math.abs(current - suggested) <= 2) els.targetGrowth.value = suggested;
+      }
+      recalc();
+    });
+  });
+
+  els.industry.addEventListener("change", () => {
+    loadDefaultsFromIndustry();
+    recalc();
+  });
+}
+
+// --------- Export: summary + print ----------
+function buildBoardSummary(){
+  const ind = selectedIndustry();
+  const regionLabel = els.region.options[els.region.selectedIndex].text;
+  const headcount = Math.max(1, Number(els.headcount.value || 1));
+  const salary = Math.max(0, Number(els.salary.value || 0));
+
+  const mixF = clamp(Number(els.mixFrontline.value || 0), 0, 100);
+  const mixM = clamp(Number(els.mixManagers.value || 0), 0, 100);
+  const mixS = clamp(Number(els.mixSpecialists.value || 0), 0, 100);
+
+  const summary = [
+    `Workforce Economics Lab — Board Summary`,
+    ``,
+    `Organisation inputs`,
+    `- Industry: ${ind.key}`,
+    `- Region modifier: ${regionLabel}`,
+    `- Headcount: ${headcount.toLocaleString("en-GB")}`,
+    `- Avg salary: £${Math.round(salary).toLocaleString("en-GB")}`,
+    `- Role mix (Frontline/Managers/Specialists): ${mixF}% / ${mixM}% / ${mixS}%`,
+    ``,
+    `Current exposure (12 months, benchmarking model)`,
+    `- Engagement score (0–100): ${els.engagementScore.textContent}`,
+    `- Attrition leakage: ${els.kpiAttrCost.textContent}`,
+    `- Hiring & scaling drag: ${els.kpiGrowthDrag.textContent} shortfall (${els.kpiGrowthNote.textContent})`,
+    `- NI optimisation gap: ${els.kpiNiGap.textContent}`,
+    `- Pension contribution gap (proxy): ${els.kpiPensionGap.textContent}`,
+    ``,
+    `Improvement scenario (12 months)`,
+    `- Attrition reduced by: ${els.assumpRetentionVal.textContent}`,
+    `- Productivity recovery: ${els.assumpProductivityVal.textContent}`,
+    `- Salary sacrifice uptake +: ${els.assumpSacrificeVal.textContent}`,
+    `- Benefits engagement +: ${els.assumpEngagementVal.textContent}`,
+    `- Estimated total impact: ${els.totalImpact.textContent}`,
+    `- Breakdown: ${els.totalImpactNote.textContent}`,
+    ``,
+    `Notes`,
+    `- This is a benchmarking model for discussion and prioritisation; outputs vary by pay structure, location, seasonality, and labour market dynamics.`,
+  ].join("\n");
+
+  return summary;
+}
+
+async function copySummary(){
+  try{
+    const txt = buildBoardSummary();
+    await navigator.clipboard.writeText(txt);
+    els.summaryStatus.textContent = "Copied.";
+    setTimeout(() => (els.summaryStatus.textContent = ""), 2000);
+  }catch{
+    els.summaryStatus.textContent = "Copy failed (browser permissions).";
+    setTimeout(() => (els.summaryStatus.textContent = ""), 2500);
+  }
+}
+
+function printView(){
+  window.print();
+}
+
+// --------- NEWS (RSS) with keyword filtering ----------
+const FEEDS = [
+  { name: "ONS", url: "https://www.ons.gov.uk/feeds/latestnews.xml" },
+  { name: "HMRC", url: "https://www.gov.uk/government/organisations/hm-revenue-customs.atom" },
+  { name: "UK Gov (Policy)", url: "https://www.gov.uk/government/topical-events.atom" },
+  { name: "Bank of England", url: "https://www.bankofengland.co.uk/rss/news" }
+];
+
+const KEYWORDS = [
+  "national insurance","ni ","hmrc","tax","salary sacrifice",
+  "pension","auto-enrol","auto enrol","workplace pension",
+  "pay","wage","minimum wage","living wage","inflation","cpi",
+  "employment law","tribunal","redundancy","layoff","hiring",
+  "benefits","wellbeing","absence","sick","workforce","labour","labor"
+];
+
+async function fetchFeed(feedUrl){
+  const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrl)}`;
+  const res = await fetch(proxied, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.text();
+}
+
+function parseRss(xmlText){
+  const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+
+  const rssItems = Array.from(doc.querySelectorAll("item")).map(x => ({
+    title: x.querySelector("title")?.textContent?.trim() || "Untitled",
+    link: x.querySelector("link")?.textContent?.trim() || "",
+    date: x.querySelector("pubDate")?.textContent?.trim() || ""
+  }));
+
+  if (rssItems.length) return rssItems;
+
+  const atomEntries = Array.from(doc.querySelectorAll("entry")).map(x => ({
+    title: x.querySelector("title")?.textContent?.trim() || "Untitled",
+    link: x.querySelector("link")?.getAttribute("href") || "",
+    date: x.querySelector("updated")?.textContent?.trim()
+       || x.querySelector("published")?.textContent?.trim() || ""
+  }));
+
+  return atomEntries;
+}
+
+function relevant(title){
+  const t = (title || "").toLowerCase();
+  return KEYWORDS.some(k => t.includes(k));
+}
+
+function renderNews(items){
+  els.newsList.innerHTML = "";
+  if (!items.length){
+    els.newsList.innerHTML = `<div class="news-item"><div class="muted">No relevant items found right now. Try refresh.</div></div>`;
+    return;
+  }
+  for (const it of items.slice(0, 10)){
+    const div = document.createElement("div");
+    div.className = "news-item";
+    const link = it.link || "#";
+    const date = it.date ? new Date(it.date).toLocaleDateString("en-GB") : "";
+    div.innerHTML = `
+      <a href="${link}" target="_blank" rel="noreferrer">${it.title}</a>
+      <div class="news-meta">
+        <span>${it.feedName}</span>
+        <span>${date}</span>
+      </div>
+    `;
+    els.newsList.appendChild(div);
+  }
+}
+
+async function refreshNews(){
+  els.newsStatus.textContent = "Loading…";
+  const all = [];
+  let ok = 0;
+
+  for (const f of FEEDS){
+    try{
+      const xml = await fetchFeed(f.url);
+      const items = parseRss(xml)
+        .filter(x => relevant(x.title))
+        .slice(0, 8)
+        .map(x => ({...x, feedName: f.name}));
+      all.push(...items);
+      ok += 1;
+    }catch{
+      // skip blocked feeds
+    }
+  }
+
+  all.sort((a,b) => {
+    const da = a.date ? new Date(a.date).getTime() : 0;
+    const db = b.date ? new Date(b.date).getTime() : 0;
+    return db - da;
+  });
+
+  renderNews(all);
+  els.newsStatus.textContent = ok ? `Updated (${ok}/${FEEDS.length} feeds).` : `Feeds blocked (try refresh later).`;
+}
+
+// --------- Init ----------
+function init(){
+  loadDefaultsFromIndustry();
+  bindRecalc();
+  recalc();
+
+  els.copySummary.addEventListener("click", copySummary);
+  els.printView.addEventListener("click", printView);
+
+  refreshNews();
+  els.refreshNews.addEventListener("click", refreshNews);
+}
+
+init();
