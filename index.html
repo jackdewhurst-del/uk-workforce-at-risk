@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UK Workforce Risk Index</title>
+  <style>
+    :root { --bg:#0b0f14; --card:#111826; --text:#e5e7eb; --muted:#9ca3af; --line:#223049; }
+    * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    header { padding: 28px 18px 10px; max-width: 1100px; margin: 0 auto; }
+    h1 { margin: 0; font-size: 22px; letter-spacing: 0.2px; }
+    p { margin: 8px 0 0; color: var(--muted); line-height: 1.4; }
+    main { max-width: 1100px; margin: 0 auto; padding: 18px; display: grid; gap: 14px; grid-template-columns: 1.1fr 0.9fr; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+    .row { display: grid; gap: 10px; grid-template-columns: repeat(12, 1fr); align-items: end; }
+    .field { grid-column: span 6; }
+    .field.sm { grid-column: span 4; }
+    .field.xs { grid-column: span 3; }
+    label { display:block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    input, select {
+      width: 100%; padding: 10px 10px; border-radius: 10px;
+      border: 1px solid var(--line); background: #0c1320; color: var(--text);
+      outline: none;
+    }
+    input:focus, select:focus { border-color: #3b82f6; }
+    .kpis { display:grid; gap: 10px; grid-template-columns: repeat(2, 1fr); margin-top: 12px; }
+    .kpi { padding: 12px; border-radius: 12px; background: #0c1320; border: 1px solid var(--line); }
+    .kpi .t { color: var(--muted); font-size: 12px; }
+    .kpi .v { margin-top: 6px; font-size: 20px; font-weight: 700; }
+    .kpi .s { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .sub { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.4; }
+    .split { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pill { display:inline-flex; align-items:center; gap:8px; padding: 8px 10px; border-radius: 999px; background:#0c1320; border:1px solid var(--line); color:var(--muted); font-size:12px; }
+    .btnrow { display:flex; gap:10px; flex-wrap: wrap; margin-top: 10px; }
+    button {
+      padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+      background: #0c1320; color: var(--text); cursor: pointer;
+    }
+    button:hover { border-color:#3b82f6; }
+    table { width:100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align:left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-size: 12px; font-weight: 600; }
+    td { font-size: 13px; color: var(--text); }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>UK Workforce Risk Index</h1>
+    <p>Estimate likely attrition exposure and replacement cost by UK industry (demo-safe benchmarking ranges, not a prediction of any single company).</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="row">
+        <div class="field">
+          <label>Industry</label>
+          <select id="industry"></select>
+        </div>
+
+        <div class="field xs">
+          <label>Headcount</label>
+          <input id="headcount" type="number" min="1" value="250" />
+        </div>
+
+        <div class="field xs">
+          <label>Avg salary (£)</label>
+          <input id="salary" type="number" min="0" value="32000" />
+        </div>
+
+        <div class="field xs">
+          <label>Replacement cost (% of salary)</label>
+          <input id="replPct" type="number" min="0" max="300" value="40" />
+        </div>
+
+        <div class="field xs">
+          <label>Attrition rate (% per year)</label>
+          <input id="attrPct" type="number" min="0" max="100" value="22" />
+        </div>
+
+        <div class="field sm">
+          <label>Retention improvement target (reduce attrition by)</label>
+          <input id="improvePct" type="number" min="0" max="20" value="3" />
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi">
+          <div class="t">Expected leavers (12 months)</div>
+          <div class="v" id="kpiLeavers">—</div>
+          <div class="s" id="kpiLeaversNote">—</div>
+        </div>
+        <div class="kpi">
+          <div class="t">Estimated replacement cost (12 months)</div>
+          <div class="v" id="kpiCost">—</div>
+          <div class="s" id="kpiCostNote">—</div>
+        </div>
+        <div class="kpi">
+          <div class="t">3-year leakage (est.)</div>
+          <div class="v" id="kpi3y">—</div>
+          <div class="s">Simple projection at constant headcount</div>
+        </div>
+        <div class="kpi">
+          <div class="t">Savings if attrition reduces</div>
+          <div class="v" id="kpiSave">—</div>
+          <div class="s" id="kpiSaveNote">—</div>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <span class="pill" id="pillRange">—</span>
+        <span class="pill" id="pillTenure">—</span>
+        <span class="pill muted">Tip: you can override the rate & replacement % live in a demo</span>
+      </div>
+
+      <div class="sub">
+        Notes: This is a benchmarking tool built from industry ranges. Real attrition varies by region, pay, management, shift patterns, seasonality, and labour market conditions.
+      </div>
+    </section>
+
+    <section class="card">
+      <canvas id="chart" height="220"></canvas>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Year</th>
+            <th>Expected leavers</th>
+            <th>Replacement cost</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+
+      <div class="sub">
+        If you want this to feel more like LayoffStats, the next step is adding a “UK map / region filter”, a “role risk heatmap”, and a “download CSV” button.
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    // Demo-safe benchmarking dataset (ranges are illustrative; refine with your preferred sources later)
+    const INDUSTRIES = [
+      { key:"Healthcare & Social Care", attrRange:[22,30], tenure:"~3 years", replRange:[30,50], defaultAttr:26, defaultRepl:40 },
+      { key:"Retail", attrRange:[30,40], tenure:"~1.5 years", replRange:[20,35], defaultAttr:35, defaultRepl:30 },
+      { key:"Hospitality", attrRange:[35,45], tenure:"~1.3 years", replRange:[20,40], defaultAttr:40, defaultRepl:30 },
+      { key:"Professional Services", attrRange:[15,22], tenure:"~4 years", replRange:[50,100], defaultAttr:18, defaultRepl:70 },
+      { key:"Manufacturing", attrRange:[10,15], tenure:"~5 years", replRange:[40,70], defaultAttr:12, defaultRepl:55 },
+      { key:"Tech / SaaS", attrRange:[15,25], tenure:"~2.5 years", replRange:[60,150], defaultAttr:20, defaultRepl:80 },
+      { key:"Education", attrRange:[12,18], tenure:"~6 years", replRange:[30,50], defaultAttr:15, defaultRepl:40 },
+      { key:"Logistics", attrRange:[18,28], tenure:"~3 years", replRange:[30,60], defaultAttr:22, defaultRepl:45 },
+      { key:"Construction", attrRange:[18,28], tenure:"~3 years", replRange:[30,60], defaultAttr:22, defaultRepl:45 },
+      { key:"Financial Services", attrRange:[10,18], tenure:"~5 years", replRange:[50,120], defaultAttr:14, defaultRepl:80 },
+      { key:"Public Sector (General)", attrRange:[8,14], tenure:"~7 years", replRange:[25,45], defaultAttr:10, defaultRepl:35 },
+    ];
+
+    const els = {
+      industry: document.getElementById("industry"),
+      headcount: document.getElementById("headcount"),
+      salary: document.getElementById("salary"),
+      replPct: document.getElementById("replPct"),
+      attrPct: document.getElementById("attrPct"),
+      improvePct: document.getElementById("improvePct"),
+      kpiLeavers: document.getElementById("kpiLeavers"),
+      kpiCost: document.getElementById("kpiCost"),
+      kpi3y: document.getElementById("kpi3y"),
+      kpiSave: document.getElementById("kpiSave"),
+      kpiLeaversNote: document.getElementById("kpiLeaversNote"),
+      kpiCostNote: document.getElementById("kpiCostNote"),
+      kpiSaveNote: document.getElementById("kpiSaveNote"),
+      pillRange: document.getElementById("pillRange"),
+      pillTenure: document.getElementById("pillTenure"),
+      tableBody: document.getElementById("tableBody"),
+    };
+
+    function fmtGBP(n){
+      const v = Math.round(n);
+      return "£" + v.toLocaleString("en-GB");
+    }
+    function fmtInt(n){ return Math.round(n).toLocaleString("en-GB"); }
+
+    // Populate dropdown
+    for (const ind of INDUSTRIES){
+      const opt = document.createElement("option");
+      opt.value = ind.key;
+      opt.textContent = ind.key;
+      els.industry.appendChild(opt);
+    }
+    els.industry.value = "Healthcare & Social Care";
+
+    function getSelectedIndustry(){
+      return INDUSTRIES.find(x => x.key === els.industry.value) || INDUSTRIES[0];
+    }
+
+    function syncDefaultsFromIndustry(){
+      const ind = getSelectedIndustry();
+      els.attrPct.value = ind.defaultAttr;
+      els.replPct.value = ind.defaultRepl;
+      els.pillRange.textContent = `Benchmark attrition range: ${ind.attrRange[0]}–${ind.attrRange[1]}%`;
+      els.pillTenure.textContent = `Typical median tenure: ${ind.tenure}`;
+    }
+
+    // Chart setup
+    const ctx = document.getElementById("chart");
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: ["Year 1","Year 2","Year 3"],
+        datasets: [
+          { label:"Replacement cost", data:[0,0,0], tension: 0.25 },
+          { label:"Expected leavers", data:[0,0,0], tension: 0.25, yAxisID: "y2" }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            ticks: { callback: (v)=>"£"+Number(v).toLocaleString("en-GB") }
+          },
+          y2: {
+            position: "right",
+            grid: { drawOnChartArea: false },
+            ticks: { callback: (v)=>Number(v).toLocaleString("en-GB") }
+          }
+        },
+        plugins: {
+          legend: { labels: { color: "#e5e7eb" } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const label = ctx.dataset.label || "";
+                const val = ctx.parsed.y;
+                if (label.includes("cost")) return `${label}: ${fmtGBP(val)}`;
+                return `${label}: ${fmtInt(val)}`;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    function recalc(){
+      const headcount = Math.max(0, Number(els.headcount.value || 0));
+      const salary = Math.max(0, Number(els.salary.value || 0));
+      const replPct = Math.max(0, Number(els.replPct.value || 0)) / 100;
+      const attrPct = Math.max(0, Number(els.attrPct.value || 0)) / 100;
+      const improve = Math.max(0, Number(els.improvePct.value || 0)) / 100;
+
+      const annualLeavers = headcount * attrPct;
+      const costPerLeaver = salary * replPct;
+      const annualCost = annualLeavers * costPerLeaver;
+
+      // Simple 3-year projection (constant headcount + rate)
+      const years = [1,2,3];
+      const leaversSeries = years.map(()=> annualLeavers);
+      const costSeries = years.map(()=> annualCost);
+
+      const cost3y = costSeries.reduce((a,b)=>a+b,0);
+
+      // Savings scenario
+      const newAttr = Math.max(0, attrPct - improve);
+      const newLeavers = headcount * newAttr;
+      const newAnnualCost = newLeavers * costPerLeaver;
+      const savings = Math.max(0, annualCost - newAnnualCost);
+      const fewerLeavers = Math.max(0, annualLeavers - newLeavers);
+
+      // KPIs
+      els.kpiLeavers.textContent = fmtInt(annualLeavers);
+      els.kpiLeaversNote.textContent = `At ${Math.round(attrPct*100)}% attrition`;
+      els.kpiCost.textContent = fmtGBP(annualCost);
+      els.kpiCostNote.textContent = `At ${Math.round(replPct*100)}% replacement cost`;
+      els.kpi3y.textContent = fmtGBP(cost3y);
+
+      els.kpiSave.textContent = fmtGBP(savings);
+      els.kpiSaveNote.textContent = `~${fmtInt(fewerLeavers)} fewer exits if attrition drops by ${Math.round(improve*100)}%`;
+
+      // Table
+      els.tableBody.innerHTML = "";
+      years.forEach((y, idx) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="muted">${2026 + (y-1)}</td>
+          <td>${fmtInt(leaversSeries[idx])}</td>
+          <td>${fmtGBP(costSeries[idx])}</td>
+        `;
+        els.tableBody.appendChild(tr);
+      });
+
+      // Chart
+      chart.data.datasets[0].data = costSeries;
+      chart.data.datasets[1].data = leaversSeries;
+      chart.update();
+    }
+
+    // Events
+    els.industry.addEventListener("change", () => { syncDefaultsFromIndustry(); recalc(); });
+    ["headcount","salary","replPct","attrPct","improvePct"].forEach(id => {
+      els[id].addEventListener("input", recalc);
+    });
+
+    // init
+    syncDefaultsFromIndustry();
+    recalc();
+  </script>
+</body>
+</html>
