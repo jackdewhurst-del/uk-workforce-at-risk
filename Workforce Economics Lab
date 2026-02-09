@@ -1,0 +1,301 @@
+<!-- index.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Workforce Economics Lab</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="wrap header">
+    <div class="brand">
+      <div class="logo">W</div>
+      <div>
+        <div class="title">Workforce Economics Lab</div>
+        <div class="subtitle">Reactive workforce risk & improvement modelling for UK employers</div>
+      </div>
+    </div>
+
+    <div class="top-controls">
+      <div class="field">
+        <label>Industry</label>
+        <select id="industry"></select>
+      </div>
+      <div class="field">
+        <label>Headcount</label>
+        <input id="headcount" type="number" min="1" value="250" />
+      </div>
+      <div class="field">
+        <label>Avg salary (£)</label>
+        <input id="salary" type="number" min="0" value="32000" />
+      </div>
+      <div class="field">
+        <label>Region modifier</label>
+        <select id="region">
+          <option value="uk" selected>UK average</option>
+          <option value="london">London (tighter market)</option>
+          <option value="se">South East</option>
+          <option value="midlands">Midlands</option>
+          <option value="north">North</option>
+          <option value="scotland">Scotland</option>
+          <option value="wales">Wales</option>
+          <option value="ni">Northern Ireland</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap grid">
+    <!-- LEFT: KPI + scenario -->
+    <section class="card kpi-card">
+      <div class="kpi-header">
+        <div>
+          <div class="kpi-title">Engagement Score</div>
+          <div class="kpi-sub">
+            Composite score (0–100) based on retention exposure, hiring drag, utilisation/renewal risk,
+            NI optimisation gap, and pension contribution gap. This is a benchmarking model for discussion.
+          </div>
+        </div>
+        <div class="score" id="engagementScore">—</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-label">12-month attrition leakage</div>
+          <div class="kpi-value" id="kpiAttrCost">—</div>
+          <div class="kpi-note" id="kpiAttrNote">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Hiring & scaling drag</div>
+          <div class="kpi-value" id="kpiGrowthDrag">—</div>
+          <div class="kpi-note" id="kpiGrowthNote">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">NI optimisation gap</div>
+          <div class="kpi-value" id="kpiNiGap">—</div>
+          <div class="kpi-note" id="kpiNiNote">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Pension contribution gap</div>
+          <div class="kpi-value" id="kpiPensionGap">—</div>
+          <div class="kpi-note" id="kpiPensionNote">—</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="impact">
+        <div class="impact-left">
+          <div class="impact-title">Estimated 12-month improvement impact</div>
+          <div class="impact-sub">
+            Scenario-based estimate across retention, productivity, NI optimisation, and engagement.
+            Adjust assumptions to match the organisation.
+          </div>
+        </div>
+        <div class="impact-right">
+          <div class="impact-value" id="totalImpact">—</div>
+          <div class="impact-note" id="totalImpactNote">—</div>
+        </div>
+      </div>
+
+      <div class="assumptions">
+        <div class="assumption">
+          <label>Retention improvement (absolute reduction in attrition rate)</label>
+          <div class="inline">
+            <input id="assumpRetention" type="range" min="0" max="3" step="0.1" value="1.0" />
+            <span class="chip" id="assumpRetentionVal">1.0pp</span>
+          </div>
+        </div>
+
+        <div class="assumption">
+          <label>Productivity recovery (reduce stress-linked lost time)</label>
+          <div class="inline">
+            <input id="assumpProductivity" type="range" min="0" max="15" step="1" value="5" />
+            <span class="chip" id="assumpProductivityVal">5%</span>
+          </div>
+        </div>
+
+        <div class="assumption">
+          <label>Increase salary sacrifice uptake (percentage points)</label>
+          <div class="inline">
+            <input id="assumpSacrifice" type="range" min="0" max="20" step="1" value="5" />
+            <span class="chip" id="assumpSacrificeVal">5pp</span>
+          </div>
+        </div>
+
+        <div class="assumption">
+          <label>Increase benefits engagement/usage (percentage points)</label>
+          <div class="inline">
+            <input id="assumpEngagement" type="range" min="0" max="25" step="1" value="8" />
+            <span class="chip" id="assumpEngagementVal">8pp</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button id="copySummary">Copy board summary</button>
+        <button id="printView">Print / Save PDF</button>
+        <span class="tiny muted" id="summaryStatus"></span>
+      </div>
+
+      <div class="foot muted">
+        Built by Jack Dewhurst — Workforce Economics
+      </div>
+    </section>
+
+    <!-- RIGHT: widgets + chart + news -->
+    <section class="stack">
+      <section class="card">
+        <div class="card-title">Inputs (linked widgets)</div>
+
+        <div class="widgets">
+          <div class="widget">
+            <div class="widget-h">Workforce mix</div>
+            <div class="row">
+              <div class="field">
+                <label>Frontline (%)</label>
+                <input id="mixFrontline" type="number" min="0" max="100" step="1" />
+              </div>
+              <div class="field">
+                <label>Managers (%)</label>
+                <input id="mixManagers" type="number" min="0" max="100" step="1" />
+              </div>
+              <div class="field">
+                <label>Specialists (%)</label>
+                <input id="mixSpecialists" type="number" min="0" max="100" step="1" />
+              </div>
+            </div>
+            <div class="widget-note" id="mixHint">—</div>
+          </div>
+
+          <div class="widget">
+            <div class="widget-h">Retention</div>
+            <div class="row">
+              <div class="field">
+                <label>Attrition rate (% / year)</label>
+                <input id="attritionRate" type="number" min="0" max="100" step="0.5" />
+              </div>
+              <div class="field">
+                <label>Replacement cost (Frontline % salary)</label>
+                <input id="replFrontline" type="number" min="0" max="300" step="1" />
+              </div>
+              <div class="field">
+                <label>Replacement cost (Managers % salary)</label>
+                <input id="replManagers" type="number" min="0" max="300" step="1" />
+              </div>
+              <div class="field">
+                <label>Replacement cost (Specialists % salary)</label>
+                <input id="replSpecialists" type="number" min="0" max="300" step="1" />
+              </div>
+            </div>
+            <div class="widget-note" id="retentionHint">—</div>
+          </div>
+
+          <div class="widget">
+            <div class="widget-h">Attraction & scaling</div>
+            <div class="row">
+              <div class="field">
+                <label>Target net growth (12 months)</label>
+                <input id="targetGrowth" type="number" min="0" step="1" />
+              </div>
+              <div class="field">
+                <label>Offer acceptance rate (%)</label>
+                <input id="acceptanceRate" type="number" min="0" max="100" step="1" />
+              </div>
+              <div class="field">
+                <label>Avg time-to-hire (days)</label>
+                <input id="timeToHire" type="number" min="1" step="1" />
+              </div>
+            </div>
+            <div class="widget-note" id="growthHint">—</div>
+          </div>
+
+          <div class="widget">
+            <div class="widget-h">NI + salary sacrifice</div>
+            <div class="row">
+              <div class="field">
+                <label>Current salary sacrifice uptake (%)</label>
+                <input id="sacrificeUptake" type="number" min="0" max="100" step="1" />
+              </div>
+              <div class="field">
+                <label>Estimated eligible workforce (%)</label>
+                <input id="eligiblePct" type="number" min="0" max="100" step="1" />
+              </div>
+              <div class="field">
+                <label>Employer NI rate (%)</label>
+                <input id="niRate" type="number" min="0" max="30" step="0.1" value="13.8" />
+              </div>
+              <div class="field">
+                <label>Avg sacrifice amount (% of salary)</label>
+                <input id="avgSacrificePct" type="number" min="0" max="25" step="0.5" />
+              </div>
+            </div>
+            <div class="widget-note" id="niHint">—</div>
+          </div>
+
+          <div class="widget">
+            <div class="widget-h">Pension contributions</div>
+            <div class="row">
+              <div class="field">
+                <label>Avg employee contribution (%)</label>
+                <input id="pensionEmployee" type="number" min="0" max="40" step="0.5" />
+              </div>
+              <div class="field">
+                <label>Avg employer contribution (%)</label>
+                <input id="pensionEmployer" type="number" min="0" max="40" step="0.5" />
+              </div>
+              <div class="field">
+                <label>Target total contribution (%)</label>
+                <input id="pensionTarget" type="number" min="0" max="40" step="0.5" />
+              </div>
+              <div class="field">
+                <label>Retirement horizon (years)</label>
+                <input id="retireYears" type="number" min="1" max="50" step="1" />
+              </div>
+            </div>
+            <div class="widget-note" id="pensionHint">—</div>
+          </div>
+
+          <div class="widget">
+            <div class="widget-h">Benefits engagement & renewal risk</div>
+            <div class="row">
+              <div class="field">
+                <label>Eligible employees using benefits (%)</label>
+                <input id="benefitUsage" type="number" min="0" max="100" step="1" />
+              </div>
+              <div class="field">
+                <label>Renewal uplift risk (% cost increase)</label>
+                <input id="renewalIncrease" type="number" min="0" max="100" step="1" />
+              </div>
+            </div>
+            <div class="widget-note" id="benefitHint">—</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">3-year view</div>
+        <canvas id="projectionChart" height="170"></canvas>
+        <div class="tiny muted">Projection assumes constant headcount (benchmarking view). Override inputs above for a tailored estimate.</div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">What’s changing (news)</div>
+        <div class="news-controls">
+          <button id="refreshNews">Refresh</button>
+          <div class="tiny muted" id="newsStatus">—</div>
+        </div>
+        <div class="news-filters tiny muted">
+          Filtered to workforce topics (NI, pensions, pay, employment law, inflation, tax, benefits).
+        </div>
+        <div id="newsList" class="news"></div>
+        <div class="tiny muted">Feeds are loaded client-side; if a source blocks browser requests the panel will skip it.</div>
+      </section>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
